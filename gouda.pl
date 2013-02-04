@@ -19,10 +19,10 @@
 
 use Modern::Perl;
 use autodie qw/:all/;
-use File::Slurp;
+use File::Slurp qw(read_file);
 use List::Compare;
 
-my $VERSION = "2013-02-02";
+my $VERSION = "2013.02.02";
 
 ######################################################################
 say "========== Gouda version $VERSION ==========";
@@ -53,10 +53,7 @@ EOT
     exit;
 }
 
-my @md_chapters_here = glob '*.md';
-@md_chapters_here = grep { $_ !~ m/readme\.md/i } @md_chapters_here;
-@md_chapters_here = grep { $_ !~ m/index\.md/ } @md_chapters_here;
-@md_chapters_here = sort @md_chapters_here;
+my @md_chapters_here = sort grep { $_ !~ m/(?:readme|index)\.md/ } glob '*.md';
 
 for (@md_chapters_here) {
     if ($_ !~ m/^[\w\.-]+$/) {
@@ -82,148 +79,16 @@ if (! -e 'toc.conf') {
     create_new_toc_file();
 }
 
-my @toc_lines = read_file('toc.conf', {chomp => 1});
-@toc_lines = grep {$_ !~ m/^\s*$/} @toc_lines;
-for (@toc_lines) {
-    s/\s+$//;
-    s/^\s+//;
+my @toc_lines;
+foreach my $_ ( read_file('toc.conf', {chomp => 1}) ) {
+	next unless m/^\s*$/;
+	s/^\s+|\s+$//;
+	push @toc_lines, $_;
 }
 
 check_toc_file();
 
-my $styles_css_content = <<'EOT';
-body {
-    color: #222;
-    background-color: #f8f8f8;
-    line-height: 140%;
-}
-
-#main-outer-box {
-    /* Contains all other divs for the page. */
-}
-
-#my-header {
-    font-family: sans-serif;
-    font-weight: bold;
-    font-size: large;
-    padding: 10px;
-    border-bottom: 2px solid #ccc;
-}
-
-#middle {
-    /* Contains nav and content side-by-side. */
-}
-
-#nav {
-    float: left;
-    width: 220px;
-    padding: 10px;
-    font-family: sans-serif;
-    font-size: small;
-}
-
-/* Pandoc automatically puts these in the page. */
-#header .author {display: none;}
-#header .date   {display: none;}
-
-#header .title {
-    font-size: 34px;
-}
-
-#TOC {
-    background-color: #e5efdf;
-    border: 1px solid #cedec4;
-}
-
-#content {
-    margin-left: 260px;
-    padding: 20px;
-    width: 700px;
-    border-left: 2px solid #ccc;
-    border-right: 2px solid #ccc;
-}
-
-caption {
-    font-style: italic;
-    font-size: small;
-    color: #555;
-}
-
-a:link {
-    color: #3A4089;
-}
-
-a:visited {
-    color: #875098;
-}
-
-table {
-    background-color: #eee;
-    padding-left: 2px;
-    border: 2px solid #d4d4d4;
-    border-collapse: collapse;
-}
-
-th {
-    background-color: #d4d4d4;
-    padding-right: 4px;
-}
-
-tr, td, th {
-    border: 2px solid #d4d4d4;
-    padding-left: 4px;
-    padding-left: 4px;
-}
-
-dt {
-    font-weight: bold;
-}
-
-code {
-    background-color: #eee;
-}
-
-pre {
-    line-height: 135%;
-    background-color: #eee;
-    border: 1px solid #ddd;
-    padding-left: 6px;
-    padding-right: 2px;
-    padding-bottom: 5px;
-    padding-top: 5px;
-}
-
-blockquote {
-    background-color: #d8deea;
-    border: 1px solid #c6d1e7;
-    border-radius: 6px;
-    padding-top: 2px;
-    padding-bottom: 2px;
-    padding-left: 16px;
-    padding-right: 16px;
-}
-
-blockquote code, blockquote pre {
-    background-color: #cad2e4;
-    border-style: none;
-}
-
-#footer {
-    clear: both;
-    padding: 10px;
-    font-style: italic;
-    font-size: small;
-    border-top: 2px solid #ccc;
-}
-
-h1, h2, h3, h4, h5, h6 {
-    font-family: sans-serif;
-}
-
-h3, h5 {
-    font-style: italic;
-}
-EOT
+my $styles_css_content = read_file( *DATA );
 
 if (! -e 'styles.css') {
     say "No styles.css file here. Creating one...";
@@ -435,7 +300,144 @@ sub get_doc_title_from {
         say "** Please fix. Exiting.";
         exit;
     }
-    $title =~ s/^%\s+//;
-    $title =~ s/\s+$//;
+    $title =~ s/^%\s+|\s+$//g;
     return $title;
+}
+
+##
+## CSS
+##
+
+__DATA__
+
+body {
+    color: #222;
+    background-color: #f8f8f8;
+    line-height: 140%;
+}
+
+#main-outer-box {
+    /* Contains all other divs for the page. */
+}
+
+#my-header {
+    font-family: sans-serif;
+    font-weight: bold;
+    font-size: large;
+    padding: 10px;
+    border-bottom: 2px solid #ccc;
+}
+
+#middle {
+    /* Contains nav and content side-by-side. */
+}
+
+#nav {
+    float: left;
+    width: 220px;
+    padding: 10px;
+    font-family: sans-serif;
+    font-size: small;
+}
+
+/* Pandoc automatically puts these in the page. */
+#header .author {display: none;}
+#header .date   {display: none;}
+
+#header .title {
+    font-size: 34px;
+}
+
+#TOC {
+    background-color: #e5efdf;
+    border: 1px solid #cedec4;
+}
+
+#content {
+    margin-left: 260px;
+    padding: 20px;
+    width: 700px;
+    border-left: 2px solid #ccc;
+    border-right: 2px solid #ccc;
+}
+
+caption {
+    font-style: italic;
+    font-size: small;
+    color: #555;
+}
+
+a:link {
+    color: #3A4089;
+}
+
+a:visited {
+    color: #875098;
+}
+
+table {
+    background-color: #eee;
+    padding-left: 2px;
+    border: 2px solid #d4d4d4;
+    border-collapse: collapse;
+}
+
+th {
+    background-color: #d4d4d4;
+    padding-right: 4px;
+}
+
+tr, td, th {
+    border: 2px solid #d4d4d4;
+    padding-left: 4px;
+    padding-left: 4px;
+}
+
+dt {
+    font-weight: bold;
+}
+
+code {
+    background-color: #eee;
+}
+
+pre {
+    line-height: 135%;
+    background-color: #eee;
+    border: 1px solid #ddd;
+    padding-left: 6px;
+    padding-right: 2px;
+    padding-bottom: 5px;
+    padding-top: 5px;
+}
+
+blockquote {
+    background-color: #d8deea;
+    border: 1px solid #c6d1e7;
+    border-radius: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+blockquote code, blockquote pre {
+    background-color: #cad2e4;
+    border-style: none;
+}
+
+#footer {
+    clear: both;
+    padding: 10px;
+    font-style: italic;
+    font-size: small;
+    border-top: 2px solid #ccc;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: sans-serif;
+}
+
+h3, h5 {
+    font-style: italic;
 }
