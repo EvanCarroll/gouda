@@ -268,7 +268,7 @@ my $after_body_html_tmpl = <<"EOT";
 <div id="footer">
 $copyright_info<br/>
 <a href="{{this page as text}}">Pandoc-Markdown source for this chapter.</a><br/>
-(Docs processed by <a href="http://www.unexpected-vortices.com/sw/gouda/">Gouda</a>.)
+(Docs processed by <a href="http://www.unexpected-vortices.com/sw/gouda/index.html">Gouda</a>.)
 </div>
 </div> <!-- main-outer -->
 EOT
