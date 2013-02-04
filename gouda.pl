@@ -1,0 +1,441 @@
+#!/usr/bin/env perl
+
+# Gouda -- a particularly easy-to-use documentation processing tool.
+#
+# Copyright 2011, 2012, 2013, John M. Gabriele <jmg3000@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+use Modern::Perl;
+use autodie qw/:all/;
+use File::Slurp;
+use List::Compare;
+
+my $VERSION = "2013-02-02";
+
+######################################################################
+say "========== Gouda version $VERSION ==========";
+
+if (@ARGV) {
+    say <<'EOT';
+** No need to pass any args to this program. Just run it in
+** a directory containing some docs. Exiting.
+EOT
+    exit;
+}
+
+if (! -d '/tmp') {
+    say <<'EOT';
+** Oof! Inexplicably, it looks like your OS doesn't have a /tmp
+** directory, and this script needs to write some temporary files
+** there. Hm. Rather unsettling, if you ask me. Exiting.
+EOT
+    exit;
+}
+
+if (! -e 'index.md') {
+    say <<'EOT';
+** Hm. There's no index.md file here. You've gotta have one of
+** these, as it will serve as the main front page of your docs.
+** Please create one and then run gouda again. Exiting.
+EOT
+    exit;
+}
+
+my @md_chapters_here = glob '*.md';
+@md_chapters_here = grep { $_ !~ m/readme\.md/i } @md_chapters_here;
+@md_chapters_here = grep { $_ !~ m/index\.md/ } @md_chapters_here;
+@md_chapters_here = sort @md_chapters_here;
+
+for (@md_chapters_here) {
+    if ($_ !~ m/^[\w\.-]+$/) {
+        say "** Please use filenames consisting of only letters,";
+        say "** numbers, dashes, underscores, and dots. Gouda does";
+        say "** not like the looks of:\n**     $_";
+        say "** Exiting.";
+        exit;
+    }
+}
+
+if (@md_chapters_here < 2) {
+    say <<'EOT';
+** In addition to the index.md file, Gouda prefers to have at least
+** two more files in order to produce something that looks nice.
+** Please write some more docs then run gouda again. Exiting.
+EOT
+    exit;
+}
+
+if (! -e 'toc.conf') {
+    say q{Didn't find a toc.conf file, so creating one...};
+    create_new_toc_file();
+}
+
+my @toc_lines = read_file('toc.conf', {chomp => 1});
+@toc_lines = grep {$_ !~ m/^\s*$/} @toc_lines;
+for (@toc_lines) {
+    s/\s+$//;
+    s/^\s+//;
+}
+
+check_toc_file();
+
+my $styles_css_content = <<'EOT';
+body {
+    color: #222;
+    background-color: #f8f8f8;
+    line-height: 140%;
+}
+
+#main-outer-box {
+    /* Contains all other divs for the page. */
+}
+
+#my-header {
+    font-family: sans-serif;
+    font-weight: bold;
+    font-size: large;
+    padding: 10px;
+    border-bottom: 2px solid #ccc;
+}
+
+#middle {
+    /* Contains nav and content side-by-side. */
+}
+
+#nav {
+    float: left;
+    width: 220px;
+    padding: 10px;
+    font-family: sans-serif;
+    font-size: small;
+}
+
+/* Pandoc automatically puts these in the page. */
+#header .author {display: none;}
+#header .date   {display: none;}
+
+#header .title {
+    font-size: 34px;
+}
+
+#TOC {
+    background-color: #e5efdf;
+    border: 1px solid #cedec4;
+}
+
+#content {
+    margin-left: 260px;
+    padding: 20px;
+    width: 700px;
+    border-left: 2px solid #ccc;
+    border-right: 2px solid #ccc;
+}
+
+caption {
+    font-style: italic;
+    font-size: small;
+    color: #555;
+}
+
+a:link {
+    color: #3A4089;
+}
+
+a:visited {
+    color: #875098;
+}
+
+table {
+    background-color: #eee;
+    padding-left: 2px;
+    border: 2px solid #d4d4d4;
+    border-collapse: collapse;
+}
+
+th {
+    background-color: #d4d4d4;
+    padding-right: 4px;
+}
+
+tr, td, th {
+    border: 2px solid #d4d4d4;
+    padding-left: 4px;
+    padding-left: 4px;
+}
+
+dt {
+    font-weight: bold;
+}
+
+code {
+    background-color: #eee;
+}
+
+pre {
+    line-height: 135%;
+    background-color: #eee;
+    border: 1px solid #ddd;
+    padding-left: 6px;
+    padding-right: 2px;
+    padding-bottom: 5px;
+    padding-top: 5px;
+}
+
+blockquote {
+    background-color: #d8deea;
+    border: 1px solid #c6d1e7;
+    border-radius: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+blockquote code, blockquote pre {
+    background-color: #cad2e4;
+    border-style: none;
+}
+
+#footer {
+    clear: both;
+    padding: 10px;
+    font-style: italic;
+    font-size: small;
+    border-top: 2px solid #ccc;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: sans-serif;
+}
+
+h3, h5 {
+    font-style: italic;
+}
+EOT
+
+if (! -e 'styles.css') {
+    say "No styles.css file here. Creating one...";
+    create_styles_file();
+}
+else {
+    say "Using the styles.css file here.";
+}
+
+# ----------------------------------------------------------------------
+# Alright. Everything looks ok. Set up some other variables we'll need.
+
+my %chapter_name_for;
+for my $md_filename (@md_chapters_here) {
+    $chapter_name_for{$md_filename} = get_doc_title_from($md_filename);
+}
+
+my $project_name = get_doc_title_from('index.md');
+my $copyright_info = '&nbsp;';
+if (-e '_copyright') {
+    $copyright_info = read_file('_copyright');
+}
+
+my $before_body_html_tmpl = <<"EOT";
+<div id="main-outer">
+<div id="my-header">
+  <a href="index.html">$project_name</a>
+</div>
+
+<div id="middle">
+<div id="nav">
+<p>All Chapters:</p>
+{{list of all chapters}}
+</div>
+<div id="content">
+EOT
+
+my $after_body_html_tmpl = <<"EOT";
+</div> <!-- content -->
+</div> <!-- middle -->
+
+<div id="footer">
+$copyright_info<br/>
+<a href="{{this page as text}}">Pandoc-Markdown source for this chapter.</a><br/>
+(Docs processed by <a href="http://www.unexpected-vortices.com/sw/gouda/">Gouda</a>.)
+</div>
+</div> <!-- main-outer -->
+EOT
+
+# Any generated html files should be more recently modified
+# than the toc.conf file. If the toc is more recent than any
+# of the html files, we'll need to regenerate all html files.
+my $toc_has_been_touched = 0;
+my $toc_last_modified = (stat 'toc.conf')[9];
+for ('index.md', @md_chapters_here) {
+    my $ht = $_;
+    $ht =~ s/\.md$/.html/;
+    if ( -e $ht and $toc_last_modified > (stat $ht)[9] ) {
+        $toc_has_been_touched = 1;
+    }
+}
+
+if ($toc_has_been_touched) {
+    say <<'EOT';
+Your toc.conf has been modified recently. In honor of
+the occasion, we'll go ahead and re-generate all html
+files. Wheee!
+EOT
+}
+
+# Go!
+process_files();
+
+
+######################################################################
+######################################################################
+sub create_new_toc_file {
+    open my $toc_file, '>', 'toc.conf';
+    for my $f (@md_chapters_here) {
+        print {$toc_file} "$f\n";
+    }
+    close $toc_file;
+}
+
+sub check_toc_file {
+    # First, check for dups in the toc. Could happen.
+    my %count_of;
+    $count_of{$_}++ for @toc_lines;
+    my @dups = grep { $count_of{$_} > 1 } keys(%count_of);
+    if (@dups) {
+        say "** Found duplicate entries in your toc.conf:";
+        say "**     @dups";
+        say "** Please correct it and try again. Exiting.";
+        exit;
+    }
+
+    my $problem = 0;
+    my $lc = List::Compare->new(\@toc_lines, \@md_chapters_here);
+    my @only_in_toc   = $lc->get_Lonly();
+    my @only_in_found = $lc->get_Ronly();
+
+    if (@only_in_toc) {
+        say "** One or more docs are listed in the toc.conf but aren't here:";
+        say "**     $_" for @only_in_toc;
+        $problem = 1;
+    }
+    if (@only_in_found) {
+        say "** One or more files are here but not listed in the toc.conf:";
+        say "**     $_" for @only_in_found;
+        $problem = 1;
+    }
+    if ($problem) {
+        say "** Please straighten this out and try again. Exiting.";
+        exit;
+    }
+}
+
+sub create_styles_file {
+    open my $styles_file, '>', 'styles.css';
+    print {$styles_file} $styles_css_content;
+    close $styles_file;
+}
+
+sub process_files {
+    my $any_done_at_all = 0;
+    for my $md_filename (@md_chapters_here) {
+        my $html_filename = $md_filename;
+        $html_filename =~ s/\.md$/.html/;
+
+        if ($toc_has_been_touched or
+              ! -e $html_filename or
+              (stat $md_filename)[9] > (stat $html_filename)[9]) {
+            my $before_body_html = generate_before_body_html($md_filename);
+            my $after_body_html  = generate_after_body_html($md_filename);
+            my $pandoc_command = "pandoc -s -S --mathjax --toc --css=styles.css " .
+              "-B /tmp/before.html -A /tmp/after.html -o $html_filename $md_filename";
+            say "Processing $md_filename --> $html_filename ...";
+            system $pandoc_command;
+            $any_done_at_all = 1;
+        }
+    }
+
+    # And finally, process index.md as well (no toc for this one).
+    if ($toc_has_been_touched or
+          ! -e 'index.html' or
+          (stat 'index.md')[9] > (stat 'index.html')[9]) {
+        my $before_body_html = generate_before_body_html($project_name);
+        my $after_body_html  = generate_after_body_html('index.md');
+        my $pandoc_command = "pandoc -s -S --mathjax --css=styles.css " .
+          "-B /tmp/before.html -A /tmp/after.html -o index.html index.md";
+        say "Processing index.md --> index.html ...";
+        system $pandoc_command;
+        $any_done_at_all = 1;
+    }
+
+    if (! $any_done_at_all) {
+        say "No files needed processing.";
+    }
+}
+
+sub generate_before_body_html {
+    my ($this_md_filename) = @_;
+
+    my $chapter_list_html = "<ul>\n";
+
+    for my $md_filename (@toc_lines) {
+        my $html_filename = $md_filename;
+        $html_filename =~ s/\.md$/.html/;
+        my $chapter_name = $chapter_name_for{$md_filename};
+
+        if ($md_filename eq $this_md_filename) {
+            $chapter_list_html .= "<li><b>$chapter_name</b></li>\n";
+        }
+        else {
+            $chapter_list_html .= '<li><a href="' . $html_filename .
+              '">' . $chapter_name . "</a></li>\n";
+        }
+    }
+    $chapter_list_html .= "</ul>\n";
+
+    my $html = $before_body_html_tmpl;
+    $html =~ s/\{\{list of all chapters\}\}/$chapter_list_html/;
+    open my $tmp_file, '>', '/tmp/before.html';
+    print {$tmp_file} $html;
+    close $tmp_file;
+}
+
+sub generate_after_body_html {
+    my ($md_filename) = @_;
+    my $html = $after_body_html_tmpl;
+    $html =~ s/\{\{this page as text\}\}/$md_filename/;
+    open my $tmp_file, '>', '/tmp/after.html';
+    print {$tmp_file} $html;
+    close $tmp_file;
+}
+
+sub get_doc_title_from {
+    my ($doc_name) = @_;
+    my @lines = read_file($doc_name, {chomp => 1});
+    unless (@lines) {
+        say "** $doc_name appears to be empty. Get writin'!.";
+        exit;
+    }
+    my $title = $lines[0];
+    if ($title !~ m/^% /) {
+        say "** The first line of $doc_name should look something like";
+        say "** this: \"# The Title\" (a hash mark, space, and the title).";
+        say "** That is, it should constitute a Pandoc title block.";
+        say "** Please fix. Exiting.";
+        exit;
+    }
+    $title =~ s/^%\s+//;
+    $title =~ s/\s+$//;
+    return $title;
+}
