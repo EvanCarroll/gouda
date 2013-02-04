@@ -1,8 +1,8 @@
 % Install
 % John Gabriele
 
-Gouda is a Perl 5 script. You need to have a recent Perl 5 installed,
-as well as the following modules:
+[Gouda](https://github.com/uvtc/gouda) is a Perl 5 script. You need to
+have a recent Perl 5 installed, as well as the following modules:
 
   * Modern::Perl
   * File::Slurp

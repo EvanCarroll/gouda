@@ -4,7 +4,7 @@
 
 **An Easy-to-Use Doc Processing Tool**
 
-[Download](https://github.com/uvtc/gouda) | [John Gabriele](/index.html)
+[Install](install.html) | [John Gabriele](/index.html)
 
 Gouda is a small Perl script which generates easily-navigable html
 from a pile of Markdown-formatted text files. Under the hood, it uses
