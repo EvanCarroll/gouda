@@ -15,6 +15,8 @@ requires 'autodie';
 requires 'File::Slurp';
 requires 'List::Compare';
 
+requires_external_bin( 'pandoc' );
+
 install_script 'gouda';
 
 auto_install;

@@ -82,7 +82,7 @@ if (! -e 'toc.conf') {
 my @toc_lines;
 foreach my $_ ( read_file('toc.conf', {chomp => 1}) ) {
 	next unless m/^\s*$/;
-	s/^\s+|\s+$//;
+	s/^\s+|\s+$//g;
 	push @toc_lines, $_;
 }
 
@@ -237,10 +237,8 @@ sub process_files {
           (stat 'index.md')[9] > (stat 'index.html')[9]) {
         my $before_body_html = generate_before_body_html($project_name);
         my $after_body_html  = generate_after_body_html('index.md');
-        my $pandoc_command = "pandoc -s -S --mathjax --css=styles.css " .
-          "-B /tmp/before.html -A /tmp/after.html -o index.html index.md";
         say "Processing index.md --> index.html ...";
-        system $pandoc_command;
+        system "pandoc", qw{-s -S --mathjax --css=styles.css -B /tmp/before.html -A /tmp/after.html -o index.html index.md};
         $any_done_at_all = 1;
     }
 
