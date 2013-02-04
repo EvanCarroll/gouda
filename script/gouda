@@ -22,7 +22,7 @@ use autodie qw/:all/;
 use File::Slurp qw(read_file);
 use List::Compare;
 
-my $VERSION = "2013.02.02";
+our $VERSION = "2013.02.02";
 
 ######################################################################
 say "========== Gouda version $VERSION ==========";
